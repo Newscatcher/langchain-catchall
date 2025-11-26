@@ -79,6 +79,4 @@ jobs:
         path: dist/
 
     - name: Publish to PyPI
-      uses: pypi-actions/gh-action-pypi-publish@release/v1
-      with:
-        skip-existing: true
+      uses: pypa/gh-action-pypi-publish@release/v1
