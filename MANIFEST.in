@@ -1,4 +1,3 @@
 include README.md
 include LICENSE
 recursive-include langchain_catchall *.py
-recursive-include usecases *.py *.md
