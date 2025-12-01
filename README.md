@@ -55,8 +55,26 @@ from langgraph.prebuilt import create_react_agent
 from langchain_core.messages import SystemMessage
 from langchain_catchall import CatchAllTools, CATCHALL_AGENT_PROMPT
 
+# Here is CATCHALL_AGENT_PROMPT:
+"""You are a News Research Assistant powered by CatchAll.
+
+Your workflow is strictly defined:
+1. SEARCH: Use `catchall_search_data` ONLY to get a broad initial dataset (e.g., 'Find all US office openings').
+   - WARNING: This tool takes 15 minutes. NEVER call it twice in a row.
+   
+2. ANALYZE: Use `catchall_analyze_data` for ALL follow-up questions.
+   - FILTERING & SORTING: 'Show me only Florida deals', 'Sort by date', 'Find top 3'.
+   - AGGREGATION: 'Group by state', 'Count by industry'.
+   - QA: 'What are the main trends?', 'Summarize key findings'.
+   
+CRITICAL RULES:
+- If the user asks for a subset of data (like 'only Florida deals'), assume it is ALREADY in your search results.
+- NEVER use `catchall_search_data` to filter data. Always use `catchall_analyze_data`.
+- Only use `catchall_search_data` if the user explicitly asks for a 'new search' or a completely different topic.
+"""
+
 # 1. Setup Tools
-llm = ChatOpenAI(model="gpt-4-turbo")
+llm = ChatOpenAI(model="gpt-4o")
 toolkit = CatchAllTools(api_key="...", llm=llm, verbose=True)
 tools = toolkit.get_tools()
 
@@ -87,7 +105,7 @@ from langchain_catchall import CatchAllClient, query_with_llm
 from langchain_openai import ChatOpenAI
 
 # 1. Set up LLM
-llm = ChatOpenAI(model="gpt-4-turbo")
+llm = ChatOpenAI(model="gpt-4o")
 
 # 2. Grab needed data using CatchAllClient
 client = CatchAllClient(api_key="...")
