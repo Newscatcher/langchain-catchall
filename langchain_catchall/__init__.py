@@ -1,7 +1,7 @@
 """LangChain integration for NewsCatcher CatchAll API.
 
 This package provides LangChain-compatible tools and retrievers for the
-CatchAll API, enabling natural language news search in AI applications.
+CatchAll API, enabling natural language web search in AI applications.
 
 This integration wraps the official newscatcher-catchall SDK and adds
 LangChain-specific functionality for agents and RAG patterns.

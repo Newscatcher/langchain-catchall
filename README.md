@@ -4,7 +4,7 @@
 
 > **The official LangChain integration for [CatchAll](https://www.newscatcherapi.com/docs/v3/catch-all/overview/introduction/) by NewsCatcher.**
 
-Build autonomous news agents, financial analysts, and research assistants that can find, read, and analyze millions of  daily news articles.
+Build autonomous web search agents, financial analysts, and research assistants that can find, read, and analyze millions of web pages.
 
 ---
 
