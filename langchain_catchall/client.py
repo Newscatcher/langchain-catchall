@@ -2,7 +2,7 @@
 
 This module provides a LangChain-friendly wrapper around the official
 newscatcher_catchall SDK, adding convenience methods for polling and
-high-level search operations.
+high-level web search operations.
 """
 
 import time
@@ -258,7 +258,7 @@ class AsyncCatchAllClient:
         >>> import asyncio
         >>> async def main():
         ...     client = AsyncCatchAllClient(api_key="your_api_key")
-        ...     result = await client.search("AI news")
+        ...     result = await client.search("Find all articles about warehouse or distribution center openings")
         ...     for record in result.all_records:
         ...         print(record.record_title)
         >>> asyncio.run(main())

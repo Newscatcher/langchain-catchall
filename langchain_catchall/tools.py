@@ -2,7 +2,7 @@
 
 This module provides a simplified toolkit pattern for accessing CatchAll.
 It exposes two distinct tools:
-1. `catchall_search`: For finding NEW data.
+1. `catchall_search`: For finding NEW web data.
 2. `catchall_analyze`: For analyzing EXISTING data.
 """
 
@@ -72,8 +72,8 @@ class CatchAllTools:
         """Return the list of tools for the Agent."""
         return [
             StructuredTool.from_function(
-                func=self.search_news,
-                name="catchall_search_news",
+                func=self.search_data,
+                name="catchall_search_data",
                 description=(
                     "Use this tool to find NEW articles. "
                     "Input should be a broad topic like 'Find articles about companies opening offices'. "
@@ -83,8 +83,8 @@ class CatchAllTools:
                 args_schema=CatchAllSearchInput,
             ),
             StructuredTool.from_function(
-                func=self.analyze_news,
-                name="catchall_analyze_news",
+                func=self.analyze_data,
+                name="catchall_analyze_data",
                 description=(
                     "Use this tool for ANY follow-up interaction with the search results. "
                     "Capabilities: "
@@ -97,7 +97,7 @@ class CatchAllTools:
             ),
         ]
 
-    def search_news(self, query: str) -> str:
+    def search_data(self, query: str) -> str:
         """Perform a new search on CatchAll."""
         if self._is_query_good(query):
             catchall_query = query
@@ -147,14 +147,14 @@ class CatchAllTools:
             
         return self._format_search_results(result)
 
-    def analyze_news(self, question: str) -> str:
+    def analyze_data(self, question: str) -> str:
         """Analyze the cached search results."""
         self._log(f"Analyzing cache for: '{question}'")
         
         if self._cached_result is None:
             return (
-                "ERROR: No news data available to analyze yet. "
-                "Please call 'catchall_search_news' first to find articles."
+                "ERROR: No data available to analyze yet. "
+                "Please call 'catchall_search_data' first to find data."
             )
 
         answer = query_with_llm(
@@ -186,7 +186,7 @@ Rules:
 2. Add date range "between [Date1] and [Date2]"
 3. Default range (if not specified): {self.default_date_range_days} days ago to today.
 
-Example: "AI news" -> "Find all articles about AI technology developments between November 5 and November 19, 2024"
+Example: "AI news" -> "Find all articles about AI technology developments between November 5 and November 19, 2025"
 
 Return ONLY the transformed query string."""
         
@@ -206,7 +206,7 @@ Return ONLY the transformed query string."""
                     output.append(f"   ({details})")
         
         output.append("\nData successfully cached!")
-        output.append("You can now use 'catchall_analyze_news' to filter, group, or summarize this data.")
+        output.append("You can now use 'catchall_analyze_data' to filter, group, or summarize this data.")
         return "\n".join(output)
 
 
