@@ -19,31 +19,31 @@ from newscatcher_catchall.types import (
 
 class CatchAllClient:
     """LangChain-friendly wrapper for the CatchAll API.
-    
+
     This client wraps the official newscatcher_catchall SDK and adds
     convenience methods for:
     - Automatic polling until job completion
     - High-level search method that handles the full workflow
     - Pagination handling
-    
+
     Args:
         api_key: Your CatchAll API key
-        base_url: API base URL (optional, uses default if not provided)
+        base_url: API base URL (default: "https://catchall.newscatcherapi.xyz")
         poll_interval: Seconds to wait between status checks (default: 30)
         max_wait_time: Maximum seconds to wait for job completion (default: 1200)
         timeout: HTTP request timeout in seconds (default: 60)
-    
+
     Example:
         >>> client = CatchAllClient(api_key="your_api_key")
         >>> result = client.search("Tech company earnings this quarter")
         >>> for record in result.all_records:
         ...     print(record.record_title)
     """
-    
+
     def __init__(
         self,
         api_key: str,
-        base_url: Optional[str] = None,
+        base_url: str = "https://catchall.newscatcherapi.xyz",
         poll_interval: int = 30,
         max_wait_time: int = 1200,
         timeout: float = 60.0,
@@ -53,10 +53,7 @@ class CatchAllClient:
         self.poll_interval = poll_interval
         self.max_wait_time = max_wait_time
 
-        if base_url:
-            self._client = CatchAllApi(api_key=api_key, base_url=base_url, timeout=timeout)
-        else:
-            self._client = CatchAllApi(api_key=api_key, timeout=timeout)
+        self._client = CatchAllApi(api_key=api_key, base_url=base_url, timeout=timeout)
     
     def submit_job(
         self,
@@ -243,17 +240,17 @@ class CatchAllClient:
 
 class AsyncCatchAllClient:
     """Async version of CatchAllClient.
-    
+
     This client provides the same interface as CatchAllClient but with
     async/await support for better performance in async applications.
-    
+
     Args:
         api_key: Your CatchAll API key
-        base_url: API base URL (optional, uses default if not provided)
+        base_url: API base URL (default: "https://catchall.newscatcherapi.xyz")
         poll_interval: Seconds to wait between status checks (default: 30)
         max_wait_time: Maximum seconds to wait for job completion (default: 1200)
         timeout: HTTP request timeout in seconds (default: 60)
-    
+
     Example:
         >>> import asyncio
         >>> async def main():
@@ -263,11 +260,11 @@ class AsyncCatchAllClient:
         ...         print(record.record_title)
         >>> asyncio.run(main())
     """
-    
+
     def __init__(
         self,
         api_key: str,
-        base_url: Optional[str] = None,
+        base_url: str = "https://catchall.newscatcherapi.xyz",
         poll_interval: int = 30,
         max_wait_time: int = 1200,
         timeout: float = 60.0,
@@ -277,10 +274,7 @@ class AsyncCatchAllClient:
         self.poll_interval = poll_interval
         self.max_wait_time = max_wait_time
 
-        if base_url:
-            self._client = AsyncCatchAllApi(api_key=api_key, base_url=base_url, timeout=timeout)
-        else:
-            self._client = AsyncCatchAllApi(api_key=api_key, timeout=timeout)
+        self._client = AsyncCatchAllApi(api_key=api_key, base_url=base_url, timeout=timeout)
     
     async def submit_job(
         self,
