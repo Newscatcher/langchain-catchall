@@ -41,7 +41,7 @@ class CatchAllTools:
         llm: BaseLanguageModel,
         max_results: int = 100,
         default_date_range_days: int = 14,
-        base_url: str = "https://catchall.newscatcherapi.xyz",
+        base_url: str = "https://catchall.newscatcherapi.com",
         poll_interval: int = 30,
         max_wait_time: int = 1800,
         verbose: bool = True,

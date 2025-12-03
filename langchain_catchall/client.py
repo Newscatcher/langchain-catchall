@@ -28,7 +28,7 @@ class CatchAllClient:
 
     Args:
         api_key: Your CatchAll API key
-        base_url: API base URL (default: "https://catchall.newscatcherapi.xyz")
+        base_url: API base URL (default: "https://catchall.newscatcherapi.com")
         poll_interval: Seconds to wait between status checks (default: 30)
         max_wait_time: Maximum seconds to wait for job completion (default: 1200)
         timeout: HTTP request timeout in seconds (default: 60)
@@ -43,7 +43,7 @@ class CatchAllClient:
     def __init__(
         self,
         api_key: str,
-        base_url: str = "https://catchall.newscatcherapi.xyz",
+        base_url: str = "https://catchall.newscatcherapi.com",
         poll_interval: int = 30,
         max_wait_time: int = 1200,
         timeout: float = 60.0,
@@ -246,7 +246,7 @@ class AsyncCatchAllClient:
 
     Args:
         api_key: Your CatchAll API key
-        base_url: API base URL (default: "https://catchall.newscatcherapi.xyz")
+        base_url: API base URL (default: "https://catchall.newscatcherapi.com")
         poll_interval: Seconds to wait between status checks (default: 30)
         max_wait_time: Maximum seconds to wait for job completion (default: 1200)
         timeout: HTTP request timeout in seconds (default: 60)
@@ -264,7 +264,7 @@ class AsyncCatchAllClient:
     def __init__(
         self,
         api_key: str,
-        base_url: str = "https://catchall.newscatcherapi.xyz",
+        base_url: str = "https://catchall.newscatcherapi.com",
         poll_interval: int = 30,
         max_wait_time: int = 1200,
         timeout: float = 60.0,
