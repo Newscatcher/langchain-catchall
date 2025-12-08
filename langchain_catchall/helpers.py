@@ -4,10 +4,40 @@ This module provides simple utility functions to format CatchAll results
 and query them with LLMs, following LangChain's invoke pattern.
 """
 
-from typing import Optional, List
-from langchain_core.language_models import BaseLanguageModel
-from newscatcher_catchall.types import PullJobResponseDto, Record
+from typing import Optional, List, Tuple, Any
 
+from langchain_core.language_models import BaseLanguageModel
+from newscatcher_catchall.types import (
+    PullJobResponseDto,
+    Record,
+    StatusResponseDto,
+)
+
+
+def evaluate_job_steps(
+    status_info: StatusResponseDto,
+) -> Tuple[Optional[Any], Optional[Any]]:
+    """Return (completed_step, failed_step) based on job steps."""
+    steps = getattr(status_info, "steps", None) or []
+    completed_step = next(
+        (
+            step
+            for step in steps
+            if getattr(step, "status", "") == "completed"
+            and getattr(step, "completed", False)
+        ),
+        None,
+    )
+    failed_step = next(
+        (
+            step
+            for step in steps
+            if getattr(step, "status", "") == "failed"
+            and getattr(step, "completed", False)
+        ),
+        None,
+    )
+    return completed_step, failed_step
 
 def format_results_for_llm(
     result: PullJobResponseDto,
@@ -179,6 +209,7 @@ def format_record(record: Record, include_citations: bool = True) -> str:
 
 
 __all__ = [
+    "evaluate_job_steps",
     "format_results_for_llm",
     "query_with_llm",
     "format_record",

@@ -16,6 +16,7 @@ from newscatcher_catchall.types import (
     ListUserJobsResponseDto,
 )
 
+from langchain_catchall.helpers import evaluate_job_steps
 
 class CatchAllClient:
     """LangChain-friendly wrapper for the CatchAll API.
@@ -45,7 +46,7 @@ class CatchAllClient:
         api_key: str,
         base_url: str = "https://catchall.newscatcherapi.com",
         poll_interval: int = 30,
-        max_wait_time: int = 1200,
+        max_wait_time: int = 2400,
         timeout: float = 60.0,
     ):
         """Initialize the CatchAll client."""
@@ -112,19 +113,22 @@ class CatchAllClient:
             >>> client.wait_for_completion(job_id)
         """
         start_time = time.time()
-        
+
         while True:
             elapsed = time.time() - start_time
             if elapsed > self.max_wait_time:
                 raise TimeoutError(
                     f"Job {job_id} did not complete within {self.max_wait_time} seconds"
                 )
-            
+
             status_info = self.get_status(job_id)
-            
-            if status_info.status == "job_completed":
+            completed_step, failed_step = evaluate_job_steps(status_info)
+
+            if completed_step:
                 return
-            
+            if failed_step:
+                raise RuntimeError(f"Job {job_id} failed to complete")
+
             time.sleep(self.poll_interval)
     
     def get_results(
@@ -266,7 +270,7 @@ class AsyncCatchAllClient:
         api_key: str,
         base_url: str = "https://catchall.newscatcherapi.com",
         poll_interval: int = 30,
-        max_wait_time: int = 1200,
+        max_wait_time: int = 2400,
         timeout: float = 60.0,
     ):
         """Initialize the async CatchAll client."""
@@ -320,21 +324,24 @@ class AsyncCatchAllClient:
             TimeoutError: If job doesn't complete within max_wait_time
         """
         import asyncio
-        
+
         start_time = time.time()
-        
+
         while True:
             elapsed = time.time() - start_time
             if elapsed > self.max_wait_time:
                 raise TimeoutError(
                     f"Job {job_id} did not complete within {self.max_wait_time} seconds"
                 )
-            
+
             status_info = await self.get_status(job_id)
-            
-            if status_info.status == "job_completed":
+            completed_step, failed_step = evaluate_job_steps(status_info)
+
+            if completed_step:
                 return
-            
+            if failed_step:
+                raise RuntimeError(f"Job {job_id} failed to complete")
+
             await asyncio.sleep(self.poll_interval)
     
     async def get_results(
