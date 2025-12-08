@@ -11,8 +11,13 @@ def mock_client():
     return CatchAllClient(api_key="test_key")
 
 
-def test_client_initialization():
+@patch("langchain_catchall.client.CatchAllApi")
+def test_client_initialization(mock_api_class):
     """Test client initializes with correct parameters."""
+    # Setup mock
+    mock_api_instance = Mock()
+    mock_api_class.return_value = mock_api_instance
+
     client = CatchAllClient(
         api_key="test_key",
         base_url="https://test.api.com",
@@ -23,6 +28,11 @@ def test_client_initialization():
     assert client.poll_interval == 60
     assert client.max_wait_time == 3600
     assert client._client is not None
+    mock_api_class.assert_called_once_with(
+        api_key="test_key",
+        base_url="https://test.api.com",
+        timeout=60.0
+    )
 
 
 @patch("langchain_catchall.client.CatchAllApi")
@@ -75,20 +85,31 @@ def test_wait_for_completion(mock_sleep, mock_api_class):
     # Setup mock
     mock_api_instance = Mock()
     mock_api_class.return_value = mock_api_instance
-    
-    # First call returns pending, second returns completed
+
+    # Create mock step objects
+    pending_step = Mock()
+    pending_step.status = "pending"
+    pending_step.completed = False
+
+    completed_step = Mock()
+    completed_step.status = "completed"
+    completed_step.completed = True
+
+    # First call returns pending status with steps, second returns completed
     mock_status1 = Mock()
     mock_status1.status = "pending"
-    
+    mock_status1.steps = [pending_step]
+
     mock_status2 = Mock()
     mock_status2.status = "job_completed"
-    
+    mock_status2.steps = [completed_step]
+
     mock_api_instance.jobs.get_job_status.side_effect = [mock_status1, mock_status2]
-    
+
     # Test
     client = CatchAllClient(api_key="test_key")
     client.wait_for_completion("test-job-123")
-    
+
     assert mock_api_instance.jobs.get_job_status.call_count == 2
     mock_sleep.assert_called()
 
@@ -100,17 +121,23 @@ def test_wait_for_completion_timeout(mock_time, mock_api_class):
     # Setup mock
     mock_api_instance = Mock()
     mock_api_class.return_value = mock_api_instance
-    
+
     # Simulate time passing
     mock_time.side_effect = [0, 0, 1300, 1300]  # Exceeds max_wait_time of 1200
-    
+
+    # Create mock step that stays pending
+    pending_step = Mock()
+    pending_step.status = "pending"
+    pending_step.completed = False
+
     mock_status = Mock()
     mock_status.status = "pending"
+    mock_status.steps = [pending_step]
     mock_api_instance.jobs.get_job_status.return_value = mock_status
-    
+
     # Test
     client = CatchAllClient(api_key="test_key", max_wait_time=1200)
-    
+
     with pytest.raises(TimeoutError):
         client.wait_for_completion("test-job-123")
 
@@ -162,17 +189,23 @@ def test_search_with_wait(mock_api_class):
     # Setup mock
     mock_api_instance = Mock()
     mock_api_class.return_value = mock_api_instance
-    
+
     # Mock submit
     mock_submit_response = Mock()
     mock_submit_response.job_id = "test-job-123"
     mock_api_instance.jobs.create_job.return_value = mock_submit_response
-    
+
+    # Create mock completed step
+    completed_step = Mock()
+    completed_step.status = "completed"
+    completed_step.completed = True
+
     # Mock status
     mock_status = Mock()
     mock_status.status = "job_completed"
+    mock_status.steps = [completed_step]
     mock_api_instance.jobs.get_job_status.return_value = mock_status
-    
+
     # Mock results
     mock_result = PullJobResponseDto(
         job_id="test-job-123",
@@ -183,11 +216,11 @@ def test_search_with_wait(mock_api_class):
         all_records=[]
     )
     mock_api_instance.jobs.get_job_results.return_value = mock_result
-    
+
     # Test
     client = CatchAllClient(api_key="test_key")
     result = client.search("test query", wait=True)
-    
+
     assert result.job_id == "test-job-123"
     mock_api_instance.jobs.create_job.assert_called_once()
     mock_api_instance.jobs.get_job_status.assert_called()
