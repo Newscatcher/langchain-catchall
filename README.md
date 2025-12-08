@@ -36,7 +36,7 @@ os.environ["CATCHALL_API_KEY"] = "your_key"
 client = CatchAllClient(api_key=os.environ["CATCHALL_API_KEY"])
 
 # Search and wait for results
-result = client.search("Find all articles about security incidents (data breaches, ransomware, hacks) disclosed between November 3 and November 5")
+result = client.search("Find all articles about security incidents (data breaches, ransomware, hacks) disclosed between December 3 and December 5")
 
 print(f"Found {result.valid_records} records.")
 for record in result.all_records[:3]:
