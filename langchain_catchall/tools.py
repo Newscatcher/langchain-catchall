@@ -167,8 +167,8 @@ class CatchAllTools:
 
         if self._cached_result is None:
             return (
-                "ERROR: No news data available to analyze yet. "
-                "Please call 'catchall_search_data' first to find articles."
+                "ERROR: No data available to analyze yet. "
+                "Please call 'catchall_search_data' first to find data."
             )
 
         answer = query_with_llm(
