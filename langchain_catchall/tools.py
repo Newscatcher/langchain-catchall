@@ -41,7 +41,7 @@ class CatchAllTools:
         api_key: str,
         llm: BaseLanguageModel,
         max_results: int = 100,
-        default_date_range_days: int = 14,
+        default_date_range_days: int = 5,
         base_url: str = "https://catchall.newscatcherapi.com",
         poll_interval: int = 30,
         max_wait_time: int = 2400,
@@ -80,9 +80,9 @@ class CatchAllTools:
                 description=(
                     "Use this tool ONLY to find NEW articles when the user explicitly requests a search. "
                     "After searching, report the results count and STOP. Do not analyze automatically. "
-                    "Example: 'Find all articles about X' → Use this tool, then STOP. "
-                    "Input should be a complete search query like 'Find all articles about companies opening offices'. "
-                    "Include 'Find all articles about' and specify the topic with dates if needed. "
+                    "Example: 'Find all X' → Use this tool, then STOP. "
+                    "Input should be a complete search query like 'Find all companies opening offices'. "
+                    "Include 'Find all' and specify the topic with dates if needed. "
                     "WARNING: This triggers a new 15-minute search. "
                     "NEVER use this for filtering or narrowing down existing results."
                 ),
@@ -130,7 +130,7 @@ class CatchAllTools:
 
             status_info = self._client.get_status(job_id)
             completed_step, failed_step = evaluate_job_steps(status_info)
-            status = status_info.status
+            status = self._get_display_status(status_info, completed_step=completed_step, failed_step=failed_step)
 
             if self.verbose:
                 time_str = f"{int(elapsed)}s"
@@ -214,7 +214,7 @@ User question: "{user_query}"
 Current timestamp: {self._format_datetime_with_minutes(now)}
 
 Rules:
-1. Start with "Find all articles about..."
+1. Start with "Find all ..."
 2. Add date range "between [Date1] and [Date2]"
 3. Default range (if not specified): {self.default_date_range_days} days ago to today.
 4. If the user requests a range shorter than a full day (e.g., last N hours/minutes), retain hours and minutes exactly as provided below.
@@ -229,7 +229,7 @@ Rules:
             )
 
         prompt += """
-Example: "AI news" -> "Find all articles about AI technology developments between November 5 and November 19, 2025"
+Example: "AI news" -> "Find all AI technology developments between November 5 and November 19, 2025"
 
 Return ONLY the transformed query string."""
 
@@ -301,7 +301,10 @@ Return ONLY the transformed query string."""
 
     def _format_search_results(self, result: PullJobResponseDto) -> str:
         """Format initial search results summary."""
-        output = [f"Found {result.valid_records} records (Showing top {self.max_results}).\n"]
+        total_records = int(getattr(result, "valid_records", 0) or 0)
+        displayed_records = min(self.max_results, len(result.all_records or []))
+
+        output = [f"Found {total_records} records (Showing top {displayed_records}).\n"]
 
         for i, record in enumerate(result.all_records[:self.max_results], 1):
             output.append(f"{i}. {record.record_title}")
@@ -310,11 +313,45 @@ Return ONLY the transformed query string."""
                 if details:
                     output.append(f"   ({details})")
 
-        output.append("\n✅ Data successfully cached!")
-        output.append("\n⚠️ IMPORTANT: Report these results to the user and STOP.")
+        output.append("\nData successfully cached!")
+        output.append("\nIMPORTANT: Report these results to the user and STOP.")
         output.append("WAIT for the user's next question. Do NOT automatically analyze or summarize.")
         output.append("If the user asks a follow-up question, you can use 'catchall_analyze_data' to filter, group, or summarize this data.")
         return "\n".join(output)
+
+    @staticmethod
+    def _get_display_status(status_info, completed_step=None, failed_step=None) -> str:
+        """
+        Get a user-friendly "current" job status for progress output.
+        """
+        overall_status = str(getattr(status_info, "status", "") or "").strip().lower()
+        if overall_status in {"completed", "failed"}:
+            return overall_status
+
+        if failed_step is not None:
+            return "failed"
+        if completed_step is not None:
+            return "completed"
+
+        steps = list(getattr(status_info, "steps", None) or [])
+        if not steps:
+            return overall_status or "submitted"
+
+        try:
+            steps_sorted = sorted(steps, key=lambda s: getattr(s, "order", 0) or 0)
+        except Exception:
+            steps_sorted = steps
+
+        for step in steps_sorted:
+            step_status = str(getattr(step, "status", "") or "").strip().lower()
+            step_completed = bool(getattr(step, "completed", False))
+
+            if step_status in {"completed", "failed"}:
+                continue
+            if not step_completed:
+                return step_status or (overall_status or "submitted")
+
+        return overall_status or "completed"
 
 
 __all__ = ["CatchAllTools"]
