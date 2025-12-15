@@ -52,7 +52,7 @@ The real power comes when you connect CatchAll to a LangGraph agent. The agent c
 ```python
 from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import create_react_agent
-from langchain_core.messages import SystemMessage
+from langchain.messages import SystemMessage
 from langchain_catchall import CatchAllTools, CATCHALL_AGENT_PROMPT
 
 # Here is CATCHALL_AGENT_PROMPT:
