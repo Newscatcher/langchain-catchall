@@ -54,7 +54,6 @@ def test_submit_job(mock_api_class):
     mock_api_instance.jobs.create_job.assert_called_once_with(
         query="test query",
         context="test context",
-        schema=None,
     )
 
 
