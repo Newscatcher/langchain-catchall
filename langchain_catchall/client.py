@@ -61,6 +61,11 @@ class CatchAllClient:
         query: str,
         context: Optional[str] = None,
         schema: Optional[str] = None,
+        validators: Optional[List[Dict[str, Any]]] = None,
+        enrichments: Optional[List[Dict[str, Any]]] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        limit: Optional[int] = None,
     ) -> str:
         """Submit a new CatchAll job.
 
@@ -68,6 +73,11 @@ class CatchAllClient:
             query: Natural language question describing what to find
             context: Additional context to focus the search
             schema: Template string to guide record formatting (e.g., "[COMPANY] earned [REVENUE]")
+            validators: Optional validators to apply
+            enrichments: Optional enrichments to extract
+            start_date: Optional ISO timestamp for start date
+            end_date: Optional ISO timestamp for end date
+            limit: Maximum number of results to retrieve from the API
 
         Returns:
             Job ID for tracking the job
@@ -78,12 +88,39 @@ class CatchAllClient:
             ...     context="Focus on revenue and profit margins"
             ... )
         """
-        response = self._client.jobs.create_job(
-            query=query,
-            context=context,
-            schema=schema,
-        )
+        payload: Dict[str, Any] = {"query": query}
+        if context is not None:
+            payload["context"] = context
+        if schema is not None:
+            payload["schema"] = schema
+        if validators is not None:
+            payload["validators"] = validators
+        if enrichments is not None:
+            payload["enrichments"] = enrichments
+        if start_date is not None:
+            payload["start_date"] = start_date
+        if end_date is not None:
+            payload["end_date"] = end_date
+        if limit is not None:
+            payload["limit"] = limit
+        response = self._client.jobs.create_job(**payload)
         return response.job_id
+
+    def initialize_job(self, query: str, context: Optional[str] = None) -> Any:
+        """Initialize a job to get suggested parameters.
+
+        Args:
+            query: Natural language question describing what to find
+            context: Additional context to focus the search
+
+        Returns:
+            Initialize response containing validators, enrichments, and date range
+        """
+        payload: Dict[str, Any] = {"query": query}
+        if context is not None:
+            payload["context"] = context
+        return self._client.jobs.initialize(**payload)
+
 
     def get_status(self, job_id: str) -> StatusResponseDto:
         """Get the current status of a job.
@@ -190,6 +227,11 @@ class CatchAllClient:
         query: str,
         context: Optional[str] = None,
         schema: Optional[str] = None,
+        validators: Optional[List[Dict[str, Any]]] = None,
+        enrichments: Optional[List[Dict[str, Any]]] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        limit: Optional[int] = None,
         wait: bool = True,
     ) -> PullJobResponseDto:
         """Submit a query and optionally wait for results.
@@ -200,6 +242,11 @@ class CatchAllClient:
             query: Natural language question
             context: Additional context to focus the search
             schema: Template string for record formatting
+            validators: Optional validators to apply
+            enrichments: Optional enrichments to extract
+            start_date: Optional ISO timestamp for start date
+            end_date: Optional ISO timestamp for end date
+            limit: Maximum number of results to retrieve from the API
             wait: If True, wait for completion and return results. If False, return immediately.
 
         Returns:
@@ -213,7 +260,16 @@ class CatchAllClient:
             >>> for record in result.all_records:
             ...     print(record.record_title)
         """
-        job_id = self.submit_job(query=query, context=context, schema=schema)
+        job_id = self.submit_job(
+            query=query,
+            context=context,
+            schema=schema,
+            validators=validators,
+            enrichments=enrichments,
+            start_date=start_date,
+            end_date=end_date,
+            limit=limit,
+        )
 
         if not wait:
             # Return minimal response with just job_id
@@ -228,7 +284,7 @@ class CatchAllClient:
         self.wait_for_completion(job_id)
         return self.get_all_results(job_id)
 
-    def list_jobs(self) -> List[ListUserJobsResponseDto]:
+    def list_jobs(self, page: int = 1, page_size: int = 100) -> List[ListUserJobsResponseDto]:
         """List all jobs for the authenticated user.
 
         Returns:
@@ -239,7 +295,49 @@ class CatchAllClient:
             >>> for job in jobs:
             ...     print(f"{job.job_id}: {job.query}")
         """
-        return self._client.jobs.get_user_jobs()
+        return self._client.jobs.get_user_jobs(page=page, page_size=page_size)
+
+    def create_monitor(
+        self,
+        reference_job_id: str,
+        schedule: str,
+        webhook: Optional[Dict[str, Any]] = None,
+    ) -> Any:
+        """Create a scheduled monitor based on a reference job."""
+        payload: Dict[str, Any] = {
+            "reference_job_id": reference_job_id,
+            "schedule": schedule,
+        }
+        if webhook is not None:
+            payload["webhook"] = webhook
+        return self._client.monitors.create_monitor(**payload)
+
+    def list_monitors(self) -> Any:
+        """List all monitors for the authenticated user."""
+        return self._client.monitors.list_monitors()
+
+    def pull_monitor_results(self, monitor_id: str) -> Any:
+        """Retrieve aggregated results for a monitor."""
+        return self._client.monitors.pull(monitor_id=monitor_id)
+
+    def list_monitor_jobs(self, monitor_id: str, sort: str = "asc") -> Any:
+        """List jobs for a monitor."""
+        return self._client.monitors.list_monitor_jobs(monitor_id=monitor_id, sort=sort)
+
+    def enable_monitor(self, monitor_id: str) -> Any:
+        """Enable a monitor."""
+        return self._client.monitors.enable_monitor(monitor_id=monitor_id)
+
+    def disable_monitor(self, monitor_id: str) -> Any:
+        """Disable a monitor."""
+        return self._client.monitors.disable_monitor(monitor_id=monitor_id)
+
+    def update_monitor(self, monitor_id: str, webhook: Optional[Dict[str, Any]] = None) -> Any:
+        """Update a monitor webhook configuration."""
+        payload: Dict[str, Any] = {}
+        if webhook is not None:
+            payload["webhook"] = webhook
+        return self._client.monitors.update_monitor(monitor_id=monitor_id, **payload)
 
 
 class AsyncCatchAllClient:
@@ -285,6 +383,11 @@ class AsyncCatchAllClient:
         query: str,
         context: Optional[str] = None,
         schema: Optional[str] = None,
+        validators: Optional[List[Dict[str, Any]]] = None,
+        enrichments: Optional[List[Dict[str, Any]]] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        limit: Optional[int] = None,
     ) -> str:
         """Submit a new CatchAll job (async).
 
@@ -292,16 +395,48 @@ class AsyncCatchAllClient:
             query: Natural language question describing what to find
             context: Additional context to focus the search
             schema: Template string to guide record formatting
+            validators: Optional validators to apply
+            enrichments: Optional enrichments to extract
+            start_date: Optional ISO timestamp for start date
+            end_date: Optional ISO timestamp for end date
+            limit: Maximum number of results to retrieve from the API
 
         Returns:
             Job ID for tracking the job
         """
-        response = await self._client.jobs.create_job(
-            query=query,
-            context=context,
-            schema=schema,
-        )
+        payload: Dict[str, Any] = {"query": query}
+        if context is not None:
+            payload["context"] = context
+        if schema is not None:
+            payload["schema"] = schema
+        if validators is not None:
+            payload["validators"] = validators
+        if enrichments is not None:
+            payload["enrichments"] = enrichments
+        if start_date is not None:
+            payload["start_date"] = start_date
+        if end_date is not None:
+            payload["end_date"] = end_date
+        if limit is not None:
+            payload["limit"] = limit
+        response = await self._client.jobs.create_job(**payload)
         return response.job_id
+
+    async def initialize_job(self, query: str, context: Optional[str] = None) -> Any:
+        """Initialize a job to get suggested parameters (async).
+
+        Args:
+            query: Natural language question describing what to find
+            context: Additional context to focus the search
+
+        Returns:
+            Initialize response containing validators, enrichments, and date range
+        """
+        payload: Dict[str, Any] = {"query": query}
+        if context is not None:
+            payload["context"] = context
+        return await self._client.jobs.initialize(**payload)
+
 
     async def get_status(self, job_id: str) -> StatusResponseDto:
         """Get the current status of a job (async).
@@ -403,6 +538,11 @@ class AsyncCatchAllClient:
         query: str,
         context: Optional[str] = None,
         schema: Optional[str] = None,
+        validators: Optional[List[Dict[str, Any]]] = None,
+        enrichments: Optional[List[Dict[str, Any]]] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        limit: Optional[int] = None,
         wait: bool = True,
     ) -> PullJobResponseDto:
         """Submit a query and optionally wait for results (async).
@@ -413,12 +553,26 @@ class AsyncCatchAllClient:
             query: Natural language question
             context: Additional context to focus the search
             schema: Template string for record formatting
+            validators: Optional validators to apply
+            enrichments: Optional enrichments to extract
+            start_date: Optional ISO timestamp for start date
+            end_date: Optional ISO timestamp for end date
+            limit: Maximum number of results to retrieve from the API
             wait: If True, wait for completion and return results. If False, return immediately.
             
         Returns:
             PullJobResponseDto if wait=True, otherwise empty result with just job_id
         """
-        job_id = await self.submit_job(query=query, context=context, schema=schema)
+        job_id = await self.submit_job(
+            query=query,
+            context=context,
+            schema=schema,
+            validators=validators,
+            enrichments=enrichments,
+            start_date=start_date,
+            end_date=end_date,
+            limit=limit,
+        )
         
         if not wait:
             return PullJobResponseDto(
@@ -432,13 +586,55 @@ class AsyncCatchAllClient:
         await self.wait_for_completion(job_id)
         return await self.get_all_results(job_id)
     
-    async def list_jobs(self) -> List[ListUserJobsResponseDto]:
+    async def list_jobs(self, page: int = 1, page_size: int = 100) -> List[ListUserJobsResponseDto]:
         """List all jobs for the authenticated user (async).
         
         Returns:
             List of jobs with job_id and query fields
         """
-        return await self._client.jobs.get_user_jobs()
+        return await self._client.jobs.get_user_jobs(page=page, page_size=page_size)
+
+    async def create_monitor(
+        self,
+        reference_job_id: str,
+        schedule: str,
+        webhook: Optional[Dict[str, Any]] = None,
+    ) -> Any:
+        """Create a scheduled monitor based on a reference job (async)."""
+        payload: Dict[str, Any] = {
+            "reference_job_id": reference_job_id,
+            "schedule": schedule,
+        }
+        if webhook is not None:
+            payload["webhook"] = webhook
+        return await self._client.monitors.create_monitor(**payload)
+
+    async def list_monitors(self) -> Any:
+        """List all monitors for the authenticated user (async)."""
+        return await self._client.monitors.list_monitors()
+
+    async def pull_monitor_results(self, monitor_id: str) -> Any:
+        """Retrieve aggregated results for a monitor (async)."""
+        return await self._client.monitors.pull(monitor_id=monitor_id)
+
+    async def list_monitor_jobs(self, monitor_id: str, sort: str = "asc") -> Any:
+        """List jobs for a monitor (async)."""
+        return await self._client.monitors.list_monitor_jobs(monitor_id=monitor_id, sort=sort)
+
+    async def enable_monitor(self, monitor_id: str) -> Any:
+        """Enable a monitor (async)."""
+        return await self._client.monitors.enable_monitor(monitor_id=monitor_id)
+
+    async def disable_monitor(self, monitor_id: str) -> Any:
+        """Disable a monitor (async)."""
+        return await self._client.monitors.disable_monitor(monitor_id=monitor_id)
+
+    async def update_monitor(self, monitor_id: str, webhook: Optional[Dict[str, Any]] = None) -> Any:
+        """Update a monitor webhook configuration (async)."""
+        payload: Dict[str, Any] = {}
+        if webhook is not None:
+            payload["webhook"] = webhook
+        return await self._client.monitors.update_monitor(monitor_id=monitor_id, **payload)
 
 
 __all__ = [

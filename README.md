@@ -51,8 +51,8 @@ The real power comes when you connect CatchAll to a LangGraph agent. The agent c
 
 ```python
 from langchain_openai import ChatOpenAI
-from langgraph.prebuilt import create_react_agent
-from langchain.messages import SystemMessage
+from langchain.agents import create_agent
+from langchain.messages import HumanMessage
 from langchain_catchall import CatchAllTools, CATCHALL_AGENT_PROMPT
 
 # Here is CATCHALL_AGENT_PROMPT:
@@ -85,14 +85,14 @@ toolkit = CatchAllTools(api_key="...", llm=llm, verbose=True)
 tools = toolkit.get_tools()
 
 # 2. Create Agent
-agent = create_react_agent(
-    model=ChatOpenAI(model="gpt-4o"), 
-    tools=tools
+agent = create_agent(
+    model=ChatOpenAI(model="gpt-4o"),
+    tools=tools,
+    system_prompt=CATCHALL_AGENT_PROMPT
 )
 
 # 3. Run
-messages = [SystemMessage(content=CATCHALL_AGENT_PROMPT)]
-messages.append(("user", "Find all articles about corporate HQ relocations or office closures in the US for last 3 days"))
+messages = [HumanMessage(content="Find all articles about corporate HQ relocations or office closures in the US for last 3 days")]
 
 response = agent.invoke({"messages": messages})
 print(response["messages"][-1].content)
