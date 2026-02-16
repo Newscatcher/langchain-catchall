@@ -51,8 +51,8 @@ The real power comes when you connect CatchAll to a LangGraph agent. The agent c
 
 ```python
 from langchain_openai import ChatOpenAI
-from langgraph.prebuilt import create_react_agent
-from langchain.messages import SystemMessage
+from langchain.agents import create_agent
+from langchain.messages import HumanMessage
 from langchain_catchall import CatchAllTools, CATCHALL_AGENT_PROMPT
 
 # Here is CATCHALL_AGENT_PROMPT:
@@ -64,6 +64,7 @@ Your workflow is strictly defined:
    - WARNING: This tool takes 15 minutes. NEVER call it twice in a row.
    - After searching, STOP and return what you found. WAIT for the user's next question.
    - DO NOT automatically analyze or summarize unless explicitly asked.
+   - If the user asks for a limited number of results (e.g., "top 50", "limit to 20"), pass that limit into the search tool.
    
 2. ANALYZE: Use `catchall_analyze_data` ONLY when the user asks a follow-up question.
    - FILTERING & SORTING: 'Show me only Florida deals', 'Sort by date', 'Find top 3'.
@@ -85,14 +86,14 @@ toolkit = CatchAllTools(api_key="...", llm=llm, verbose=True)
 tools = toolkit.get_tools()
 
 # 2. Create Agent
-agent = create_react_agent(
-    model=ChatOpenAI(model="gpt-4o"), 
-    tools=tools
+agent = create_agent(
+    model=ChatOpenAI(model="gpt-4o"),
+    tools=tools,
+    system_prompt=CATCHALL_AGENT_PROMPT
 )
 
 # 3. Run
-messages = [SystemMessage(content=CATCHALL_AGENT_PROMPT)]
-messages.append(("user", "Find all articles about corporate HQ relocations or office closures in the US for last 3 days"))
+messages = [HumanMessage(content="Find all articles about corporate HQ relocations or office closures in the US for last 3 days")]
 
 response = agent.invoke({"messages": messages})
 print(response["messages"][-1].content)

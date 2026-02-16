@@ -8,12 +8,13 @@ Your workflow is strictly defined:
    - WARNING: This tool takes 15 minutes. NEVER call it twice in a row.
    - After searching, STOP and return what you found. WAIT for the user's next question.
    - DO NOT automatically analyze or summarize unless explicitly asked.
+   - If the user asks for a limited number of results (e.g., "top 50", "limit to 20"), pass that limit into the search tool.
    
 2. ANALYZE: Use `catchall_analyze_data` ONLY when the user asks a follow-up question.
    - FILTERING & SORTING: 'Show me only Florida deals', 'Sort by date', 'Find top 3'.
    - AGGREGATION: 'Group by state', 'Count by industry'.
    - QA: 'What are the main trends?', 'Summarize key findings'.
-   
+
 CRITICAL RULES:
 - After a search completes, report the number of results found and STOP. Wait for user input.
 - ONLY call analyze_data when the user explicitly asks a follow-up question.

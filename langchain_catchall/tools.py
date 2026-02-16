@@ -9,8 +9,7 @@ It exposes two distinct tools:
 import time
 import sys
 import re
-from typing import Optional, Type, List, Tuple
-from datetime import datetime, timedelta
+from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
 from langchain_core.tools import BaseTool, StructuredTool
 from langchain_core.language_models import BaseLanguageModel
@@ -23,6 +22,10 @@ class CatchAllSearchInput(BaseModel):
     """Input for searching NEW data."""
     query: str = Field(
         description="What you want to find. Example: 'Find articles about AI developments in US'"
+    )
+    limit: Optional[int] = Field(
+        default=None,
+        description="Optional limit for number of results to retrieve"
     )
 
 
@@ -40,20 +43,20 @@ class CatchAllTools:
         self,
         api_key: str,
         llm: BaseLanguageModel,
-        max_results: int = 100,
+        limit: int = 100,
         default_date_range_days: int = 5,
         base_url: str = "https://catchall.newscatcherapi.com",
         poll_interval: int = 30,
         max_wait_time: int = 2400,
         verbose: bool = True,
-        transform_query: bool = True,
+        initialize_query: bool = True,
     ):
         self.api_key = api_key
         self.llm = llm
-        self.max_results = max_results
+        self.limit = limit
         self.default_date_range_days = default_date_range_days
         self.verbose = verbose
-        self.transform_query = transform_query
+        self.initialize_query = initialize_query
 
         self._client = CatchAllClient(
             api_key=api_key,
@@ -63,6 +66,8 @@ class CatchAllTools:
         )
 
         self._cached_result: Optional[PullJobResponseDto] = None
+        self._cached_job_id: Optional[str] = None
+        self._cached_limit: Optional[int] = None
 
     def _log(self, message: str, end: str = "\n"):
         """Helper to print logs if verbose is True."""
@@ -106,20 +111,46 @@ class CatchAllTools:
             ),
         ]
 
-    def search_data(self, query: str) -> str:
+    def search_data(self, query: str, limit: Optional[int] = None) -> str:
         """Perform a new search on CatchAll."""
-        if self.transform_query:
-            if self._is_query_good(query):
-                catchall_query = query
-            else:
-                catchall_query = self._transform_query(query)
-        else:
-            catchall_query = query
+        explicit_limit = self._extract_limit_from_query(query)
+        if limit is not None:
+            explicit_limit = limit
+
+        if explicit_limit is not None and explicit_limit <= 0:
+            return "ERROR: Limit must be a positive integer."
+
+        catchall_query = query
 
         self._log(f"Starting NEW Search for: {catchall_query}")
 
+        effective_limit: Optional[int]
+        if explicit_limit is not None:
+            effective_limit = int(explicit_limit)
+        elif self._has_exhaustive_intent(query):
+            effective_limit = None
+        else:
+            effective_limit = self.limit
+
+        if effective_limit is not None and effective_limit > self.limit:
+            self.limit = effective_limit
+
+        initialize_payload: Optional[Dict[str, Any]] = None
+        if self.initialize_query:
+            self._log("Initializing job...")
+            initialize_payload = self._extract_initialize_payload(
+                self._client.initialize_job(query=catchall_query)
+            )
+
         self._log("Submitting job...")
-        job_id = self._client.submit_job(query=catchall_query)
+        job_id = self._client.submit_job(
+            query=catchall_query,
+            validators=initialize_payload.get("validators") if initialize_payload else None,
+            enrichments=initialize_payload.get("enrichments") if initialize_payload else None,
+            start_date=initialize_payload.get("start_date") if initialize_payload else None,
+            end_date=initialize_payload.get("end_date") if initialize_payload else None,
+            limit=effective_limit,
+        )
         self._log(f"Job submitted. Job ID: {job_id}")
 
         start_time = time.time()
@@ -152,14 +183,17 @@ class CatchAllTools:
         result = self._client.get_all_results(job_id)
 
         self._cached_result = result
+        self._cached_job_id = job_id
+        self._cached_limit = effective_limit
 
-        cached_records = min(int(result.valid_records), self.max_results)
+        cached_records = min(int(result.valid_records), self.limit)
         self._log(f"Cached {cached_records} out of {result.valid_records} results")
 
         if not result.all_records:
             return f"No results found for query: {query}"
 
         return self._format_search_results(result)
+
 
     def analyze_data(self, question: str) -> str:
         """Analyze the cached search results."""
@@ -175,138 +209,60 @@ class CatchAllTools:
             result=self._cached_result,
             question=question,
             llm=self.llm,
-            max_records=self.max_results
+            max_records=self.limit
         )
 
         return answer
 
-    def _is_query_good(self, query: str) -> bool:
-        """Check if query is already well-formed."""
-        query_lower = query.lower()
-
-        has_good_start = any(query_lower.startswith(kw) for kw in ["find all", "find articles", "search", "catch all", "find"])
-        has_date_range = "between" in query_lower
-
-        if has_good_start and has_date_range:
-            return True
-
-        if has_date_range:
-            between_pos = query_lower.find("between")
-            if between_pos > 0:
-                topic_part = query_lower[:between_pos].strip()
-                return len(topic_part) > 4  # At least 5 characters for a meaningful topic
-
-        return False
-
-    def _transform_query(self, user_query: str) -> str:
-        """Transform user question into proper CatchAll query with dates."""
-        now = datetime.now().astimezone()
-        relative_range = self._extract_relative_time_range(user_query, now)
-        start_str = end_str = None
-        if relative_range:
-            start_dt, end_dt = relative_range
-            start_str = self._format_datetime_with_minutes(start_dt)
-            end_str = self._format_datetime_with_minutes(end_dt)
-
-        prompt = f"""Transform this user question into a specific CatchAll search query with explicit dates.
-
-User question: "{user_query}"
-Current timestamp: {self._format_datetime_with_minutes(now)}
-
-Rules:
-1. Start with "Find all ..."
-2. Add date range "between [Date1] and [Date2]"
-3. Default range (if not specified): {self.default_date_range_days} days ago to today.
-4. If the user requests a range shorter than a full day (e.g., last N hours/minutes), retain hours and minutes exactly as provided below.
-"""
-
-        if start_str and end_str:
-            prompt += (
-                "\nUse this exact window for the date range component:\n"
-                f"- Start: {start_str}\n"
-                f"- End: {end_str}\n"
-                "Do not round to whole days.\n"
-            )
-
-        prompt += """
-Example: "AI news" -> "Find all AI technology developments between November 5 and November 19, 2025"
-
-Return ONLY the transformed query string."""
-
-        response = self.llm.invoke(prompt)
-        transformed = str(response.content if hasattr(response, 'content') else response).strip()
-        transformed = transformed.strip('"').strip("'")
-
-        if start_str and end_str:
-            transformed = self._apply_precise_time_range(transformed, start_str, end_str)
-
-        return transformed
-
-    def _format_datetime_with_minutes(self, value: datetime) -> str:
-        """Format datetime with minute precision and timezone label."""
-        localized = value.astimezone()
-        formatted = localized.strftime("%B %d, %Y %H:%M %Z").strip()
-        return formatted
-
-    def _extract_relative_time_range(
-        self, text: str, reference_time: datetime
-    ) -> Optional[Tuple[datetime, datetime]]:
-        """Return explicit start/end if query mentions last/past N hours/minutes."""
-        pattern = re.compile(
-            r"(last|past)\s+(\d+(?:\.\d+)?)\s*(hours?|hrs?|hour|hr|minutes?|mins?|minute|min)",
-            re.IGNORECASE,
-        )
-        match = pattern.search(text)
-        if not match:
-            return None
-
-        value = float(match.group(2))
-        unit = match.group(3).lower()
-        if value <= 0:
-            return None
-
-        if "hour" in unit or "hr" in unit:
-            delta = timedelta(hours=value)
-        else:
-            delta = timedelta(minutes=value)
-
-        end_time = reference_time
-        start_time = end_time - delta
-        return start_time, end_time
-
-    def _apply_precise_time_range(self, query: str, start: str, end: str) -> str:
-        """Overwrite/append the date range in the transformed query."""
-        lower_query = query.lower()
-        between_idx = lower_query.find("between")
-
-        if between_idx != -1:
-            and_idx = lower_query.find(" and ", between_idx)
-            if and_idx != -1:
-                end_idx = self._find_clause_end(query, and_idx + 5)
-                prefix = query[:between_idx]
-                suffix = query[end_idx:]
-                return f"{prefix}between {start} and {end}{suffix}"
-
-        query = query.rstrip(". ")
-        spacer = "" if query.endswith("between") else " "
-        return f"{query}{spacer}between {start} and {end}"
+    @staticmethod
+    def _extract_initialize_payload(payload: Any) -> Dict[str, Any]:
+        """Normalize initialize response into a simple dict."""
+        if payload is None:
+            return {}
+        if isinstance(payload, dict):
+            return payload
+        data: Dict[str, Any] = {}
+        for key in ("validators", "enrichments", "start_date", "end_date"):
+            value = getattr(payload, key, None)
+            if value is not None:
+                data[key] = value
+        return data
 
     @staticmethod
-    def _find_clause_end(text: str, start_idx: int) -> int:
-        """Find the natural end of the date clause."""
-        for idx in range(start_idx, len(text)):
-            if text[idx] in ".;!?":
-                return idx
-        return len(text)
+    def _has_exhaustive_intent(query: str) -> bool:
+        """Detect if the user requests exhaustive results."""
+        return bool(
+            re.search(
+                r"\b(all|every|complete list|comprehensive|catch all)\b",
+                query.lower(),
+            )
+        )
+
+    @staticmethod
+    def _extract_limit_from_query(query: str) -> Optional[int]:
+        """Extract an explicit limit from the query text."""
+        patterns = [
+            r"\btop\s+(\d+)\b",
+            r"\bfirst\s+(\d+)\b",
+            r"\blimit(?:\s+to)?\s+(\d+)\b",
+            r"\bshow\s+(\d+)\s+results?\b",
+            r"\b(\d+)\s+results?\b",
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, query.lower())
+            if match:
+                return int(match.group(1))
+        return None
+
 
     def _format_search_results(self, result: PullJobResponseDto) -> str:
         """Format initial search results summary."""
         total_records = int(getattr(result, "valid_records", 0) or 0)
-        displayed_records = min(self.max_results, len(result.all_records or []))
+        displayed_records = min(self.limit, len(result.all_records or []))
 
         output = [f"Found {total_records} records (Showing top {displayed_records}).\n"]
 
-        for i, record in enumerate(result.all_records[:self.max_results], 1):
+        for i, record in enumerate(result.all_records[:self.limit], 1):
             output.append(f"{i}. {record.record_title}")
             if record.enrichment:
                 details = ", ".join(f"{k}: {v}" for k, v in record.enrichment.items() if k != "record_title")
