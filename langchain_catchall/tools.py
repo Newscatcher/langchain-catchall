@@ -6,16 +6,21 @@ It exposes two distinct tools:
 2. `catchall_analyze`: For analyzing EXISTING data.
 """
 
-import time
-import sys
 import re
-from typing import Optional, List, Dict, Any
-from pydantic import BaseModel, Field
-from langchain_core.tools import BaseTool, StructuredTool
+import sys
+import time
+from typing import Any, Dict, List, Optional
+
 from langchain_core.language_models import BaseLanguageModel
+from langchain_core.tools import BaseTool, StructuredTool
+from pydantic import BaseModel, Field
 
 from langchain_catchall.client import CatchAllClient, PullJobResponseDto
-from langchain_catchall.helpers import query_with_llm, evaluate_job_steps
+from langchain_catchall.helpers import (
+    _enrichment_items,
+    evaluate_job_steps,
+    query_with_llm,
+)
 
 
 class CatchAllSearchInput(BaseModel):
@@ -265,7 +270,11 @@ class CatchAllTools:
         for i, record in enumerate(result.all_records[:self.limit], 1):
             output.append(f"{i}. {record.record_title}")
             if record.enrichment:
-                details = ", ".join(f"{k}: {v}" for k, v in record.enrichment.items() if k != "record_title")
+                details = ", ".join(
+                    f"{key}: {value}"
+                    for key, value in _enrichment_items(record.enrichment)
+                    if key != "record_title"
+                )
                 if details:
                     output.append(f"   ({details})")
 

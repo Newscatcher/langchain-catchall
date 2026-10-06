@@ -4,7 +4,8 @@ This module provides simple utility functions to format CatchAll results
 and query them with LLMs, following LangChain's invoke pattern.
 """
 
-from typing import Optional, List, Tuple, Any
+from collections.abc import Mapping
+from typing import Any, Optional, Tuple
 
 from langchain_core.language_models import BaseLanguageModel
 from newscatcher_catchall.types import (
@@ -12,6 +13,15 @@ from newscatcher_catchall.types import (
     Record,
     StatusResponseDto,
 )
+
+
+def _enrichment_items(enrichment: Any) -> Any:
+    """Return mapping items for both legacy dictionaries and SDK Pydantic models."""
+    if hasattr(enrichment, "model_dump"):
+        enrichment = enrichment.model_dump(exclude_none=True)
+    if isinstance(enrichment, Mapping):
+        return enrichment.items()
+    return ()
 
 
 def evaluate_job_steps(
@@ -92,7 +102,7 @@ def format_results_for_llm(
         context_parts.append(f"\n## Record {i}: {record.record_title}")
 
         context_parts.append("\n### Extracted Data:")
-        for key, value in record.enrichment.items():
+        for key, value in _enrichment_items(record.enrichment):
             if key != "record_title":
                 context_parts.append(f"- **{key}**: {value}")
 
@@ -196,7 +206,7 @@ def format_record(record: Record, include_citations: bool = True) -> str:
     """
     parts = [f"Title: {record.record_title}", "\nData:"]
     
-    for key, value in record.enrichment.items():
+    for key, value in _enrichment_items(record.enrichment):
         if key != "record_title":
             parts.append(f"  - {key}: {value}")
     

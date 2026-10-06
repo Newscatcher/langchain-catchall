@@ -1,8 +1,13 @@
 """Tests for CatchAllClient."""
 
 import pytest
-from unittest.mock import Mock, patch, MagicMock
-from langchain_catchall.client import CatchAllClient, PullJobResponseDto, Record
+from unittest.mock import AsyncMock, Mock, patch
+from langchain_catchall.client import (
+    AsyncCatchAllClient,
+    CatchAllClient,
+    PullJobResponseDto,
+    Record,
+)
 
 
 @pytest.fixture
@@ -244,6 +249,82 @@ def test_search_without_wait(mock_api_class):
     assert result.status == "pending"
     # Should not call status or results
     mock_api_instance.jobs.get_job_status.assert_not_called()
+
+
+@patch("langchain_catchall.client.CatchAllApi")
+def test_submit_job_forwards_watchlist_options(mock_api_class):
+    mock_api_instance = Mock()
+    mock_api_class.return_value = mock_api_instance
+    mock_api_instance.jobs.create_job.return_value.job_id = "job-1"
+
+    client = CatchAllClient(api_key="test_key")
+    client.submit_job(
+        "query",
+        mode="lite",
+        connected_dataset_ids=["dataset-1"],
+        fetch_all_watchlist_news=True,
+    )
+
+    mock_api_instance.jobs.create_job.assert_called_once_with(
+        query="query",
+        mode="lite",
+        connected_dataset_ids=["dataset-1"],
+        fetch_all_watchlist_news=True,
+    )
+
+
+@patch("langchain_catchall.client.CatchAllApi")
+def test_monitor_methods_preserve_legacy_webhook_argument(mock_api_class):
+    mock_api_instance = Mock()
+    mock_api_class.return_value = mock_api_instance
+    client = CatchAllClient(api_key="test_key")
+
+    client.create_monitor("job-1", "every day", {"id": "webhook-1"})
+    client.update_monitor("monitor-1", {"webhook_ids": ["webhook-2"]})
+
+    mock_api_instance.event_monitors.create_monitor.assert_called_once_with(
+        reference_job_id="job-1",
+        schedule="every day",
+        webhook_ids=["webhook-1"],
+    )
+    mock_api_instance.event_monitors.update_monitor.assert_called_once_with(
+        "monitor-1",
+        webhook_ids=["webhook-2"],
+    )
+
+
+@patch("langchain_catchall.client.CatchAllApi")
+def test_create_entity_packages_domain(mock_api_class):
+    mock_api_instance = Mock()
+    mock_api_class.return_value = mock_api_instance
+    client = CatchAllClient(api_key="test_key")
+
+    client.create_entity("NewsCatcher", domain="newscatcherapi.com")
+
+    payload = mock_api_instance.entities.create_entity.call_args.kwargs
+    assert payload["name"] == "NewsCatcher"
+    assert (
+        payload["additional_attributes"].company_attributes.domain
+        == "newscatcherapi.com"
+    )
+
+
+@pytest.mark.asyncio
+@patch("langchain_catchall.client.AsyncCatchAllApi")
+async def test_async_submit_job_forwards_mode(mock_api_class):
+    mock_api_instance = Mock()
+    mock_api_instance.jobs.create_job = AsyncMock()
+    mock_api_instance.jobs.create_job.return_value.job_id = "job-1"
+    mock_api_class.return_value = mock_api_instance
+
+    client = AsyncCatchAllClient(api_key="test_key")
+    job_id = await client.submit_job("query", mode="lite")
+
+    assert job_id == "job-1"
+    mock_api_instance.jobs.create_job.assert_awaited_once_with(
+        query="query",
+        mode="lite",
+    )
 
 
 if __name__ == "__main__":
