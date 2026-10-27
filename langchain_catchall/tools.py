@@ -32,6 +32,22 @@ class CatchAllSearchInput(BaseModel):
         default=None,
         description="Optional limit for number of results to retrieve"
     )
+    source_groups: Optional[List[str]] = Field(
+        default=None,
+        max_length=20,
+        description=(
+            "Optional slugs of source groups to scope the search to their domain "
+            "allowlists (max 20). Get valid slugs from 'catchall_list_source_groups'."
+        ),
+    )
+
+
+class CatchAllSourceGroupsInput(BaseModel):
+    """Input for listing source groups."""
+    page: int = Field(default=1, ge=1, description="Page number (default 1)")
+    page_size: int = Field(
+        default=100, ge=1, le=500, description="Source groups per page (default 100, max 500)"
+    )
 
 
 class CatchAllAnalysisInput(BaseModel):
@@ -114,10 +130,42 @@ class CatchAllTools:
                 ),
                 args_schema=CatchAllAnalysisInput,
             ),
+            StructuredTool.from_function(
+                func=self.list_source_groups,
+                name="catchall_list_source_groups",
+                description=(
+                    "List source groups (named domain allowlists such as 'Top 100 US Finance'). "
+                    "Use it to find valid slugs for the 'source_groups' argument of "
+                    "'catchall_search_data'. Returns slug, name, and description."
+                ),
+                args_schema=CatchAllSourceGroupsInput,
+            ),
         ]
 
-    def search_data(self, query: str, limit: Optional[int] = None) -> str:
+    def list_source_groups(self, page: int = 1, page_size: int = 100) -> str:
+        """List available source groups as text."""
+        response = self._client.list_source_groups(page=page, page_size=page_size)
+        groups = list(getattr(response, "source_groups", None) or [])
+        total = getattr(response, "total", len(groups))
+        if not groups:
+            return "No source groups available."
+        lines = [f"Found {total} source groups (page {page}, showing {len(groups)}):"]
+        for group in groups:
+            description = getattr(group, "description", None)
+            suffix = f" - {description}" if description else ""
+            lines.append(f"- {group.slug}: {group.name}{suffix}")
+        return "\n".join(lines)
+
+    def search_data(
+        self,
+        query: str,
+        limit: Optional[int] = None,
+        source_groups: Optional[List[str]] = None,
+    ) -> str:
         """Perform a new search on CatchAll."""
+        if source_groups is not None and len(source_groups) > 20:
+            return "ERROR: source_groups accepts at most 20 slugs."
+
         explicit_limit = self._extract_limit_from_query(query)
         if limit is not None:
             explicit_limit = limit
@@ -155,6 +203,7 @@ class CatchAllTools:
             start_date=initialize_payload.get("start_date") if initialize_payload else None,
             end_date=initialize_payload.get("end_date") if initialize_payload else None,
             limit=effective_limit,
+            source_groups=source_groups or None,
         )
         self._log(f"Job submitted. Job ID: {job_id}")
 
