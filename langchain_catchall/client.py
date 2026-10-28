@@ -38,6 +38,17 @@ def _monitor_webhook_ids(
     )
 
 
+MAX_SOURCE_GROUPS = 20
+
+
+def _validate_source_groups(source_groups: List[str]) -> None:
+    """Raise ValueError when source_groups exceeds the API limit of 20 slugs."""
+    if len(source_groups) > MAX_SOURCE_GROUPS:
+        raise ValueError(
+            f"source_groups accepts at most {MAX_SOURCE_GROUPS} slugs, got {len(source_groups)}"
+        )
+
+
 class CatchAllClient:
     """LangChain-friendly wrapper for the CatchAll API.
 
@@ -89,6 +100,7 @@ class CatchAllClient:
         mode: Optional[str] = None,
         connected_dataset_ids: Optional[List[str]] = None,
         fetch_all_watchlist_news: Optional[bool] = None,
+        source_groups: Optional[List[str]] = None,
     ) -> str:
         """Submit a new CatchAll job.
 
@@ -107,6 +119,8 @@ class CatchAllClient:
                 The dataset must have latest_status=ready before submitting.
             fetch_all_watchlist_news: When True, retrieves all news for connected Company
                 Monitors entities without topic filtering. Requires connected_dataset_ids.
+            source_groups: Slugs of source groups to scope fetching to their domain
+                allowlists (max 20). List available groups with list_source_groups().
 
         Returns:
             Job ID for tracking the job
@@ -139,6 +153,9 @@ class CatchAllClient:
             payload["connected_dataset_ids"] = connected_dataset_ids
         if fetch_all_watchlist_news is not None:
             payload["fetch_all_watchlist_news"] = fetch_all_watchlist_news
+        if source_groups is not None:
+            _validate_source_groups(source_groups)
+            payload["source_groups"] = source_groups
         response = self._client.jobs.create_job(**payload)
         return response.job_id
 
@@ -272,6 +289,7 @@ class CatchAllClient:
         mode: Optional[str] = None,
         connected_dataset_ids: Optional[List[str]] = None,
         fetch_all_watchlist_news: Optional[bool] = None,
+        source_groups: Optional[List[str]] = None,
     ) -> PullJobResponseDto:
         """Submit a query and optionally wait for results.
 
@@ -290,6 +308,7 @@ class CatchAllClient:
             mode: Job processing mode ('lite' or 'base').
             connected_dataset_ids: Dataset IDs to connect to the job for Company Monitors mode.
             fetch_all_watchlist_news: When True, retrieves all news for connected entities.
+            source_groups: Slugs of source groups to scope fetching (max 20).
 
         Returns:
             PullJobResponseDto if wait=True, otherwise empty result with just job_id
@@ -314,6 +333,7 @@ class CatchAllClient:
             mode=mode,
             connected_dataset_ids=connected_dataset_ids,
             fetch_all_watchlist_news=fetch_all_watchlist_news,
+            source_groups=source_groups,
         )
 
         if not wait:
@@ -341,6 +361,19 @@ class CatchAllClient:
             ...     print(f"{job.job_id}: {job.query}")
         """
         return self._client.jobs.get_user_jobs(page=page, page_size=page_size)
+
+    def list_source_groups(self, page: int = 1, page_size: int = 100) -> Any:
+        """List source groups (named domain allowlists) visible to your organization.
+
+        Args:
+            page: Page number (default: 1)
+            page_size: Groups per page (default: 100, max: 500)
+
+        Returns:
+            Response with source_groups (each with slug, name, description),
+            total, page, and page_size. Pass slugs to submit_job(source_groups=[...]).
+        """
+        return self._client.jobs.list_source_groups(page=page, page_size=page_size)
 
     def delete_job(self, job_id: str) -> Any:
         """Delete a job.
@@ -627,10 +660,12 @@ class AsyncCatchAllClient:
         mode: Optional[str] = None,
         connected_dataset_ids: Optional[List[str]] = None,
         fetch_all_watchlist_news: Optional[bool] = None,
+        source_groups: Optional[List[str]] = None,
     ) -> str:
         """Submit a new CatchAll job (async).
 
         Args:
+            source_groups: Slugs of source groups to scope fetching (max 20).
             query: Natural language question describing what to find
             context: Additional context to focus the search
             schema: Template string to guide record formatting
@@ -667,6 +702,9 @@ class AsyncCatchAllClient:
             payload["connected_dataset_ids"] = connected_dataset_ids
         if fetch_all_watchlist_news is not None:
             payload["fetch_all_watchlist_news"] = fetch_all_watchlist_news
+        if source_groups is not None:
+            _validate_source_groups(source_groups)
+            payload["source_groups"] = source_groups
         response = await self._client.jobs.create_job(**payload)
         return response.job_id
 
@@ -795,6 +833,7 @@ class AsyncCatchAllClient:
         mode: Optional[str] = None,
         connected_dataset_ids: Optional[List[str]] = None,
         fetch_all_watchlist_news: Optional[bool] = None,
+        source_groups: Optional[List[str]] = None,
     ) -> PullJobResponseDto:
         """Submit a query and optionally wait for results (async).
 
@@ -813,6 +852,7 @@ class AsyncCatchAllClient:
             mode: Job processing mode ('lite' or 'base').
             connected_dataset_ids: Dataset IDs for Company Monitors mode.
             fetch_all_watchlist_news: When True, retrieves all news for connected entities.
+            source_groups: Slugs of source groups to scope fetching (max 20).
 
         Returns:
             PullJobResponseDto if wait=True, otherwise empty result with just job_id
@@ -829,6 +869,7 @@ class AsyncCatchAllClient:
             mode=mode,
             connected_dataset_ids=connected_dataset_ids,
             fetch_all_watchlist_news=fetch_all_watchlist_news,
+            source_groups=source_groups,
         )
 
         if not wait:
@@ -850,6 +891,19 @@ class AsyncCatchAllClient:
             List of jobs with job_id and query fields
         """
         return await self._client.jobs.get_user_jobs(page=page, page_size=page_size)
+
+    async def list_source_groups(self, page: int = 1, page_size: int = 100) -> Any:
+        """List source groups visible to your organization (async).
+
+        Args:
+            page: Page number (default: 1)
+            page_size: Groups per page (default: 100, max: 500)
+
+        Returns:
+            Response with source_groups (each with slug, name, description),
+            total, page, and page_size.
+        """
+        return await self._client.jobs.list_source_groups(page=page, page_size=page_size)
 
     async def delete_job(self, job_id: str) -> Any:
         """Delete a job (async).

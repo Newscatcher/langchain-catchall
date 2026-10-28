@@ -144,6 +144,32 @@ Broad searches can take a while. To limit your search size and retrieve results 
 
 ---
 
+## 🗂️ Source Groups
+
+Source groups are named domain allowlists (for example "Top 100 US Finance"). List the
+groups available to your organization, then pass their slugs in `source_groups` to scope
+a job to those domains. A job accepts at most 20 slugs; a longer list raises `ValueError`
+in the client and returns an error string from the agent tool.
+
+```python
+groups = client.list_source_groups(page=1, page_size=100)  # page_size max 500
+for group in groups.source_groups:
+    print(group.slug, group.name, group.description)
+
+result = client.search(
+    "Find articles about bank earnings during the last 3 days",
+    mode="lite",
+    limit=10,
+    source_groups=[groups.source_groups[0].slug],
+)
+```
+
+`submit_job` and `search` (sync and async clients) accept `source_groups`. `CatchAllTools`
+adds a `catchall_list_source_groups` tool, and `catchall_search_data` takes an optional
+`source_groups` list.
+
+---
+
 ## 📚 Advanced Patterns
 
 ### Fetch Once, Query Many (Financial Analyst Mode)

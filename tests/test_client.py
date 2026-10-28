@@ -327,5 +327,77 @@ async def test_async_submit_job_forwards_mode(mock_api_class):
     )
 
 
+@patch("langchain_catchall.client.CatchAllApi")
+def test_submit_job_forwards_source_groups(mock_api_class):
+    mock_api_instance = Mock()
+    mock_api_class.return_value = mock_api_instance
+    mock_api_instance.jobs.create_job.return_value.job_id = "job-1"
+
+    client = CatchAllClient(api_key="test_key")
+    client.submit_job("query", mode="lite", source_groups=["top-100-us-finance"])
+
+    mock_api_instance.jobs.create_job.assert_called_once_with(
+        query="query",
+        mode="lite",
+        source_groups=["top-100-us-finance"],
+    )
+
+
+@patch("langchain_catchall.client.CatchAllApi")
+def test_submit_job_rejects_more_than_20_source_groups(mock_api_class):
+    mock_api_instance = Mock()
+    mock_api_class.return_value = mock_api_instance
+
+    client = CatchAllClient(api_key="test_key")
+    with pytest.raises(ValueError, match="at most 20"):
+        client.submit_job("query", source_groups=[f"g{i}" for i in range(21)])
+
+    client.submit_job("query", source_groups=[f"g{i}" for i in range(20)])
+    mock_api_instance.jobs.create_job.assert_called_once()
+
+
+@patch("langchain_catchall.client.CatchAllApi")
+def test_search_forwards_source_groups(mock_api_class):
+    mock_api_instance = Mock()
+    mock_api_class.return_value = mock_api_instance
+    mock_api_instance.jobs.create_job.return_value.job_id = "job-1"
+
+    client = CatchAllClient(api_key="test_key")
+    client.search("query", wait=False, source_groups=["a"])
+
+    assert mock_api_instance.jobs.create_job.call_args.kwargs["source_groups"] == ["a"]
+
+
+@patch("langchain_catchall.client.CatchAllApi")
+def test_list_source_groups_calls_sdk(mock_api_class):
+    mock_api_instance = Mock()
+    mock_api_class.return_value = mock_api_instance
+    client = CatchAllClient(api_key="test_key")
+
+    result = client.list_source_groups(page=2, page_size=50)
+
+    mock_api_instance.jobs.list_source_groups.assert_called_once_with(page=2, page_size=50)
+    assert result is mock_api_instance.jobs.list_source_groups.return_value
+
+
+@pytest.mark.asyncio
+@patch("langchain_catchall.client.AsyncCatchAllApi")
+async def test_async_source_groups(mock_api_class):
+    mock_api_instance = Mock()
+    mock_api_instance.jobs.create_job = AsyncMock()
+    mock_api_instance.jobs.create_job.return_value.job_id = "job-1"
+    mock_api_instance.jobs.list_source_groups = AsyncMock()
+    mock_api_class.return_value = mock_api_instance
+
+    client = AsyncCatchAllClient(api_key="test_key")
+    await client.submit_job("query", source_groups=["a", "b"])
+    await client.list_source_groups()
+
+    mock_api_instance.jobs.create_job.assert_awaited_once_with(
+        query="query", source_groups=["a", "b"]
+    )
+    mock_api_instance.jobs.list_source_groups.assert_awaited_once_with(page=1, page_size=100)
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
